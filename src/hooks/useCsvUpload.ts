@@ -24,6 +24,17 @@ export function useCsvUpload(): UseCsvUploadResult {
     const validationError = validateCsvFile(file);
     if (validationError) {
       setError(validationError.message);
+
+      // Track CSV upload validation failure
+      if (typeof pendo !== 'undefined') {
+        pendo.track('csv_upload_failed', {
+          fileName: file.name.substring(0, 100),
+          fileSize: file.size,
+          errorMessage: validationError.message.substring(0, 200),
+          errorType: 'validation',
+        });
+      }
+
       return;
     }
 
@@ -32,9 +43,31 @@ export function useCsvUpload(): UseCsvUploadResult {
     try {
       const parsed = await parseCsvFile(file);
       setDataset(parsed);
+
+      // Track successful CSV file upload
+      if (typeof pendo !== 'undefined') {
+        pendo.track('csv_file_uploaded', {
+          fileName: parsed.fileName.substring(0, 100),
+          fileSize: parsed.fileSize,
+          rowCount: parsed.rows.length,
+          columnCount: parsed.headers.length,
+          columnHeaders: parsed.headers.join(', ').substring(0, 200),
+        });
+      }
     } catch (err) {
       setDataset(null);
-      setError(err instanceof Error ? err.message : 'An unexpected error occurred.');
+      const errorMessage = err instanceof Error ? err.message : 'An unexpected error occurred.';
+      setError(errorMessage);
+
+      // Track CSV upload parse failure
+      if (typeof pendo !== 'undefined') {
+        pendo.track('csv_upload_failed', {
+          fileName: file.name.substring(0, 100),
+          fileSize: file.size,
+          errorMessage: errorMessage.substring(0, 200),
+          errorType: 'parse',
+        });
+      }
     } finally {
       setIsLoading(false);
     }

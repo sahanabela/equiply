@@ -37,9 +37,45 @@ export function useEnrichment(): UseEnrichmentResult {
         setEnriched(result.dataset);
         setStats(result.stats);
         setStatus('done');
+
+        // Track successful data enrichment
+        if (typeof pendo !== 'undefined') {
+          const s = result.stats;
+          pendo.track('data_enrichment_completed', {
+            totalRows: s.totalRows,
+            datesDecoded: s.datesDecoded,
+            datesFromUdi: s.datesFromUdi,
+            datesFromRules: s.datesFromRules,
+            datesFromAsset: s.datesFromAsset,
+            typesFromGudid: s.typesFromGudid,
+            typesFromOverride: s.typesFromOverride,
+            typesFromModel: s.typesFromModel,
+            typesUnknown: s.typesUnknown,
+            uniqueLookupPairs: s.uniqueLookupPairs,
+            gudidPairsResolved: s.gudidPairsResolved,
+            uniqueUnknownPairs: s.uniqueUnknownPairs,
+            usedModel: s.usedModel,
+            llmModel: model,
+            confidenceHigh: s.byConfidence.high,
+            confidenceMedium: s.byConfidence.medium,
+            confidenceLow: s.byConfidence.low,
+            confidenceNone: s.byConfidence.none,
+          });
+        }
       } catch (err) {
-        setError(err instanceof Error ? err.message : 'Enrichment failed.');
+        const errorMessage = err instanceof Error ? err.message : 'Enrichment failed.';
+        setError(errorMessage);
         setStatus('error');
+
+        // Track enrichment failure
+        if (typeof pendo !== 'undefined') {
+          pendo.track('data_enrichment_failed', {
+            errorMessage: errorMessage.substring(0, 200),
+            hadApiKey: !!(apiKey.trim()),
+            llmModel: model,
+            totalRows: dataset.rows.length,
+          });
+        }
       }
     },
     [],

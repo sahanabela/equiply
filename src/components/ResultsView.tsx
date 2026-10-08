@@ -49,7 +49,18 @@ export function ResultsView({ dataset, enriched, onClear }: ResultsViewProps) {
           <button
             type="button"
             className="btn btn--ghost"
-            onClick={() => exportCsv(target)}
+            onClick={() => {
+              exportCsv(target);
+              // Track CSV export
+              if (typeof pendo !== 'undefined') {
+                pendo.track('data_exported', {
+                  exportFormat: 'csv',
+                  fileName: target.fileName.substring(0, 100),
+                  rowCount: target.rows.length,
+                  columnCount: target.headers.length,
+                });
+              }
+            }}
             disabled={!isEnriched}
             title={isEnriched ? 'Download enriched CSV' : 'Enrich first'}
           >
@@ -58,7 +69,18 @@ export function ResultsView({ dataset, enriched, onClear }: ResultsViewProps) {
           <button
             type="button"
             className="btn btn--ghost"
-            onClick={() => exportJson(target)}
+            onClick={() => {
+              exportJson(target);
+              // Track JSON export
+              if (typeof pendo !== 'undefined') {
+                pendo.track('data_exported', {
+                  exportFormat: 'json',
+                  fileName: target.fileName.substring(0, 100),
+                  rowCount: target.rows.length,
+                  columnCount: target.headers.length,
+                });
+              }
+            }}
             disabled={!isEnriched}
             title={isEnriched ? 'Download enriched JSON' : 'Enrich first'}
           >
