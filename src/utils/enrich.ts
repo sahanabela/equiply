@@ -7,6 +7,7 @@ import { applySerialRules } from './rulesEngine';
 import { lookupOverride, type DeviceTypeResult } from '../data/deviceReference';
 import { resolveDeviceType, resolveMany } from '../services/gudid';
 import { classifyDeviceTypes, type ClassifyItem } from '../services/deviceClassifier';
+import { trackEvent } from '../services/pendo';
 
 // Only two columns are appended to the data. Confidence / precision / source
 // are still computed internally (for the enrichment summary), but are not added
@@ -126,6 +127,14 @@ export function buildAssetDateIndex(dataset: CsvDataset): Record<string, string>
   return index;
 }
 
+/** Thrown when the dataset has no recognizable manufacturer or serial-number column. */
+export class MissingColumnsError extends Error {
+  constructor(message: string) {
+    super(message);
+    this.name = 'MissingColumnsError';
+  }
+}
+
 /**
  * Layered enrichment pipeline:
  *   normalize → tier1 UDI/PI parse → tier3 serial rules        (manufactured_date)
@@ -140,7 +149,7 @@ export async function enrichDataset(
 ): Promise<EnrichOutput> {
   const cols = detectColumns(dataset.headers);
   if (!cols.manufacturer || !cols.serial) {
-    throw new Error(
+    throw new MissingColumnsError(
       'Could not find the required columns. Expected a manufacturer column and a serial-number column.',
     );
   }
@@ -230,11 +239,27 @@ export async function enrichDataset(
   stats.uniqueUnknownPairs = unknownPairs.length;
   let modelMap: Record<string, string> = {};
   if (unknownPairs.length > 0 && options.apiKey && options.model) {
+    const classifyStartedAt = performance.now();
     modelMap = await classifyDeviceTypes(unknownPairs, {
       apiKey: options.apiKey,
       model: options.model,
     });
+    const durationMs = Math.round(performance.now() - classifyStartedAt);
     stats.usedModel = true;
+
+    // Same "real answer" check Pass 4 applies; pairs missing from the response count as unknown.
+    const pairsClassified = unknownPairs.filter((p) => {
+      const type = modelMap[p.key];
+      return !!type && type.toLowerCase() !== 'unknown';
+    }).length;
+    trackEvent('ai_device_classification_completed', {
+      model: options.model,
+      pairsSent: unknownPairs.length,
+      pairsClassified,
+      pairsReturnedUnknown: unknownPairs.length - pairsClassified,
+      durationMs,
+      totalRows: dataset.rows.length,
+    });
   }
 
   // --- Pass 4: assemble enriched rows with provenance ---
