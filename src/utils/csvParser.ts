@@ -1,5 +1,5 @@
 import Papa from 'papaparse';
-import type { CsvDataset, CsvRow, UploadError } from '../types/csv';
+import type { CsvDataset, CsvRow, UploadError, UploadErrorReason } from '../types/csv';
 
 const MAX_FILE_SIZE = 10 * 1024 * 1024; // 10 MB
 const PREVIEW_ROW_LIMIT = 100;
@@ -17,18 +17,29 @@ export function validateCsvFile(file: File): UploadError | null {
     file.name.toLowerCase().endsWith('.csv');
 
   if (!isCsv) {
-    return { message: 'Please upload a valid CSV file (.csv).' };
+    return { reason: 'invalid_file_type', message: 'Please upload a valid CSV file (.csv).' };
   }
 
   if (file.size > MAX_FILE_SIZE) {
-    return { message: 'File exceeds the 10 MB size limit.' };
+    return { reason: 'file_too_large', message: 'File exceeds the 10 MB size limit.' };
   }
 
   if (file.size === 0) {
-    return { message: 'The selected file is empty.' };
+    return { reason: 'empty_file', message: 'The selected file is empty.' };
   }
 
   return null;
+}
+
+/** A parse failure with a stable `reason` code alongside the user-facing message. */
+export class CsvParseError extends Error {
+  readonly reason: UploadErrorReason;
+
+  constructor(reason: UploadErrorReason, message: string) {
+    super(message);
+    this.name = 'CsvParseError';
+    this.reason = reason;
+  }
 }
 
 export function parseCsvFile(file: File): Promise<CsvDataset> {
@@ -41,7 +52,7 @@ export function parseCsvFile(file: File): Promise<CsvDataset> {
         const headers = results.meta.fields ?? [];
 
         if (headers.length === 0) {
-          reject(new Error('No column headers found in the CSV file.'));
+          reject(new CsvParseError('no_headers', 'No column headers found in the CSV file.'));
           return;
         }
 
@@ -50,7 +61,7 @@ export function parseCsvFile(file: File): Promise<CsvDataset> {
         );
 
         if (rows.length === 0) {
-          reject(new Error('The CSV file contains headers but no data rows.'));
+          reject(new CsvParseError('no_data_rows', 'The CSV file contains headers but no data rows.'));
           return;
         }
 
@@ -63,7 +74,7 @@ export function parseCsvFile(file: File): Promise<CsvDataset> {
         });
       },
       error: (error) => {
-        reject(new Error(error.message || 'Failed to parse CSV file.'));
+        reject(new CsvParseError('parse_error', error.message || 'Failed to parse CSV file.'));
       },
     });
   });

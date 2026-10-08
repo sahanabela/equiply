@@ -1,7 +1,8 @@
 import { useRef, type ChangeEvent, type DragEvent } from 'react';
+import type { UploadMethod } from '../types/csv';
 
 interface CsvUploadZoneProps {
-  onFileSelect: (file: File) => void;
+  onFileSelect: (file: File, uploadMethod: UploadMethod) => void;
   isLoading: boolean;
   isDragging: boolean;
   onDragStateChange: (dragging: boolean) => void;
@@ -32,12 +33,12 @@ export function CsvUploadZone({
     onDragStateChange(false);
 
     const file = event.dataTransfer.files[0];
-    if (file) onFileSelect(file);
+    if (file) onFileSelect(file, 'drag_and_drop');
   };
 
   const handleInputChange = (event: ChangeEvent<HTMLInputElement>) => {
     const file = event.target.files?.[0];
-    if (file) onFileSelect(file);
+    if (file) onFileSelect(file, 'file_picker');
     event.target.value = '';
   };
 
